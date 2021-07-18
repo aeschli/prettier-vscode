@@ -1,6 +1,38 @@
 import * as prettier from "prettier";
 
-type PrettierModule = typeof prettier;
+type PrettierSupportLanguage = {
+  vscodeLanguageIds?: string[];
+  extensions?: string[];
+  parsers: string[];
+};
+type PrettierFileInfoResult = {
+  ignored: boolean;
+  inferredParser?: PrettierBuiltInParserName | null;
+};
+type PrettierBuiltInParserName = string;
+type PrettierResolveConfigOptions = prettier.ResolveConfigOptions;
+type PrettierOptions = prettier.Options;
+type PrettierFileInfoOptions = prettier.FileInfoOptions;
+
+type PrettierModule = {
+  format(source: string, options?: prettier.Options): string;
+  getSupportInfo(): { languages: PrettierSupportLanguage[] };
+  getFileInfo(
+    filePath: string,
+    options?: PrettierFileInfoOptions
+  ): Promise<PrettierFileInfoResult>;
+  resolveConfig(
+    filePath: string,
+    options?: PrettierResolveConfigOptions
+  ): Promise<PrettierOptions | null>;
+  resolveConfigFile(filePath: string): Promise<string | null>;
+};
+
+type ModuleResolverInterface = {
+  getPrettierInstance(fileName: string): Promise<PrettierModule | undefined>;
+  getGlobalPrettierInstance(): PrettierModule;
+  dispose(): void;
+};
 
 type TrailingCommaOption = "none" | "es5" | "all";
 

@@ -65,5 +65,59 @@ const config = {
     ],
   },
 };
+
+const browserConfig = /** @type WebpackConfig */ {
+  mode: "none",
+  target: "webworker", // web extensions run in a webworker context
+  entry: {
+    "web-extension": "./src/extension.ts",
+  },
+  output: {
+    filename: "web-[name].js",
+    // eslint-disable-next-line no-undef
+    path: path.join(__dirname, "./dist"),
+    libraryTarget: "commonjs",
+  },
+  resolve: {
+    mainFields: ["module", "browser", "main"],
+    extensions: [".ts", ".js"], // support ts-files and js-files
+    alias: {
+      "./ModuleResolver": "./BrowserModuleResolver",
+    },
+    fallback: {
+      // eslint-disable-next-line no-undef
+      path: require.resolve("path-browserify"),
+      // eslint-disable-next-line no-undef
+      util: require.resolve("util/"),
+    },
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: "ts-loader",
+          },
+        ],
+      },
+    ],
+  },
+  externals: {
+    vscode: "commonjs vscode", // ignored because it doesn't exist
+  },
+  performance: {
+    hints: false,
+  },
+  devtool: "nosources-source-map",
+  plugins: [
+    new webpack.DefinePlugin({
+      "process.env": JSON.stringify({}),
+      "process.env.BROWSER_ENV": JSON.stringify("true"),
+    }),
+  ],
+};
+
 // eslint-disable-next-line no-undef
-module.exports = config;
+module.exports = [config, browserConfig];

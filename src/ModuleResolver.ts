@@ -5,7 +5,7 @@ import * as path from "path";
 import * as prettier from "prettier";
 import * as resolve from "resolve";
 import * as semver from "semver";
-import { commands, Disposable, Uri, workspace } from "vscode";
+import { commands, Uri, workspace } from "vscode";
 import { resolveGlobalNodePath, resolveGlobalYarnPath } from "./Files";
 import { LoggingService } from "./LoggingService";
 import {
@@ -16,12 +16,14 @@ import {
   USING_BUNDLED_PRETTIER,
 } from "./message";
 import { getFromWorkspaceState, updateWorkspaceState } from "./stateUtils";
-import { PackageManagers, PrettierModule } from "./types";
+import { ModuleResolverInterface, PackageManagers } from "./types";
 import { getConfig, getWorkspaceRelativePath } from "./util";
 
 const minPrettierVersion = "1.13.0";
 declare const __webpack_require__: typeof require;
 declare const __non_webpack_require__: typeof require;
+
+export type PrettierNodeModule = typeof prettier;
 
 const globalPaths: {
   [key: string]: { cache: string | undefined; get(): string | undefined };
@@ -58,10 +60,14 @@ function globalPathGet(packageManager: PackageManagers): string | undefined {
   return undefined;
 }
 
-export class ModuleResolver implements Disposable {
-  private path2Module = new Map<string, PrettierModule>();
+export class ModuleResolver implements ModuleResolverInterface {
+  private path2Module = new Map<string, PrettierNodeModule>();
 
   constructor(private loggingService: LoggingService) {}
+
+  public getGlobalPrettierInstance(): PrettierNodeModule {
+    return prettier;
+  }
 
   /**
    * Returns an instance of the prettier module.
@@ -69,7 +75,7 @@ export class ModuleResolver implements Disposable {
    */
   public async getPrettierInstance(
     fileName: string
-  ): Promise<PrettierModule | undefined> {
+  ): Promise<PrettierNodeModule | undefined> {
     if (!workspace.isTrusted) {
       this.loggingService.logDebug(UNTRUSED_WORKSPACE_USING_BUNDLED_PRETTIER);
       return prettier;
@@ -127,7 +133,7 @@ export class ModuleResolver implements Disposable {
       }
     }
 
-    let moduleInstance: PrettierModule | undefined = undefined;
+    let moduleInstance: PrettierNodeModule | undefined = undefined;
     if (modulePath !== undefined) {
       // First check module cache
       moduleInstance = this.path2Module.get(modulePath);
@@ -135,7 +141,7 @@ export class ModuleResolver implements Disposable {
         return moduleInstance;
       } else {
         try {
-          moduleInstance = this.loadNodeModule<PrettierModule>(modulePath);
+          moduleInstance = this.loadNodeModule<PrettierNodeModule>(modulePath);
           if (moduleInstance) {
             this.path2Module.set(modulePath, moduleInstance);
           }

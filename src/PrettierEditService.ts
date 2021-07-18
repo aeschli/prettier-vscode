@@ -1,4 +1,3 @@
-import * as prettier from "prettier";
 import {
   Disposable,
   DocumentFilter,
@@ -14,12 +13,16 @@ import {
 import { getParserFromLanguageId } from "./languageFilters";
 import { LoggingService } from "./LoggingService";
 import { INVALID_PRETTIER_CONFIG, RESTART_TO_ENABLE } from "./message";
-import { ModuleResolver } from "./ModuleResolver";
 import { PrettierEditProvider } from "./PrettierEditProvider";
 import { FormatterStatus, StatusBar } from "./StatusBar";
 import {
   ExtensionFormattingOptions,
+  ModuleResolverInterface,
+  PrettierBuiltInParserName,
+  PrettierFileInfoResult,
   PrettierModule,
+  PrettierOptions,
+  PrettierResolveConfigOptions,
   RangeFormattingOptions,
 } from "./types";
 import { getConfig, getWorkspaceRelativePath } from "./util";
@@ -64,7 +67,7 @@ export default class PrettierEditService implements Disposable {
   ];
 
   constructor(
-    private moduleResolver: ModuleResolver,
+    private moduleResolver: ModuleResolverInterface,
     private loggingService: LoggingService,
     private statusBar: StatusBar
   ) {}
@@ -200,7 +203,9 @@ export default class PrettierEditService implements Disposable {
   };
 
   public async registerGlobal() {
-    const selectors = await this.getSelectors(prettier);
+    const selectors = await this.getSelectors(
+      this.moduleResolver.getGlobalPrettierInstance()
+    );
     this.registerDocumentFormatEditorProviders(selectors);
     this.loggingService.logDebug("Enabling Prettier globally", selectors);
   }
@@ -341,10 +346,15 @@ export default class PrettierEditService implements Disposable {
 
     const vscodeConfig = getConfig(uri);
 
+    const prettierGlobalInstance =
+      this.moduleResolver.getGlobalPrettierInstance();
+
     let configPath: string | undefined;
     try {
       if (!isUntitled) {
-        configPath = (await prettier.resolveConfigFile(fileName)) ?? undefined;
+        configPath =
+          (await prettierGlobalInstance.resolveConfigFile(fileName)) ??
+          undefined;
       }
     } catch (error) {
       this.loggingService.logError(
@@ -355,7 +365,7 @@ export default class PrettierEditService implements Disposable {
       return;
     }
 
-    const resolveConfigOptions: prettier.ResolveConfigOptions = {
+    const resolveConfigOptions: PrettierResolveConfigOptions = {
       config: isUntitled
         ? undefined
         : vscodeConfig.configPath
@@ -364,11 +374,14 @@ export default class PrettierEditService implements Disposable {
       editorconfig: isUntitled ? undefined : vscodeConfig.useEditorConfig,
     };
 
-    let resolvedConfig: prettier.Options | null;
+    let resolvedConfig: PrettierOptions | null;
     try {
       resolvedConfig = isUntitled
         ? null
-        : await prettier.resolveConfig(fileName, resolveConfigOptions);
+        : await prettierGlobalInstance.resolveConfig(
+            fileName,
+            resolveConfigOptions
+          );
     } catch (error) {
       this.loggingService.logError(
         "Invalid prettier configuration file detected.",
@@ -418,7 +431,7 @@ export default class PrettierEditService implements Disposable {
       return;
     }
 
-    let fileInfo: prettier.FileInfoResult | undefined;
+    let fileInfo: PrettierFileInfoResult | undefined;
     if (fileName) {
       fileInfo = await prettierInstance.getFileInfo(fileName, {
         ignorePath: resolvedIgnorePath,
@@ -434,7 +447,7 @@ export default class PrettierEditService implements Disposable {
       return;
     }
 
-    let parser: prettier.BuiltInParserName | string | undefined;
+    let parser: PrettierBuiltInParserName | string | undefined;
     if (fileInfo && fileInfo.inferredParser) {
       parser = fileInfo.inferredParser;
     } else if (languageId !== "plaintext") {
@@ -459,7 +472,7 @@ export default class PrettierEditService implements Disposable {
 
     const prettierOptions = this.getPrettierOptions(
       fileName,
-      parser as prettier.BuiltInParserName,
+      parser as PrettierBuiltInParserName,
       vscodeConfig,
       resolvedConfig,
       options
@@ -482,14 +495,14 @@ export default class PrettierEditService implements Disposable {
 
   private getPrettierOptions(
     fileName: string,
-    parser: prettier.BuiltInParserName,
-    vsCodeConfig: prettier.Options,
-    configOptions: prettier.Options | null,
+    parser: PrettierBuiltInParserName,
+    vsCodeConfig: PrettierOptions,
+    configOptions: PrettierOptions | null,
     extentionFormattingOptions: ExtensionFormattingOptions
-  ): Partial<prettier.Options> {
+  ): Partial<PrettierOptions> {
     const fallbackToVSCodeConfig = configOptions === null;
 
-    const vsOpts: prettier.Options = {};
+    const vsOpts: PrettierOptions = {};
     if (fallbackToVSCodeConfig) {
       vsOpts.arrowParens = vsCodeConfig.arrowParens;
       vsOpts.bracketSpacing = vsCodeConfig.bracketSpacing;
@@ -527,12 +540,12 @@ export default class PrettierEditService implements Disposable {
       };
     }
 
-    const options: prettier.Options = {
+    const options: PrettierOptions = {
       ...(fallbackToVSCodeConfig ? vsOpts : {}),
       ...{
         /* cspell: disable-next-line */
         filepath: fileName,
-        parser: parser as prettier.BuiltInParserName,
+        parser: parser as PrettierBuiltInParserName,
       },
       ...(rangeFormattingOptions || {}),
       ...(configOptions || {}),

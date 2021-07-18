@@ -8,6 +8,7 @@ import { TemplateService } from "./TemplateService";
 import { getConfig } from "./util";
 import { RESTART_TO_ENABLE, EXTENSION_DISABLED } from "./message";
 import { setGlobalState, setWorkspaceState } from "./stateUtils";
+//import { BrowserModuleResolver } from "./BrowserModuleResolver";
 
 // the application insights key (also known as instrumentation key)
 const extensionName = process.env.EXTENSION_NAME || "dev.prettier-vscode";
@@ -40,9 +41,12 @@ export function activate(context: ExtensionContext) {
   setGlobalState(context.globalState);
   setWorkspaceState(context.workspaceState);
 
-  const templateService = new TemplateService(loggingService);
-
   const moduleResolver = new ModuleResolver(loggingService);
+
+  const templateService = new TemplateService(
+    loggingService,
+    moduleResolver.getGlobalPrettierInstance()
+  );
 
   const statusBar = new StatusBar();
 
