@@ -173,7 +173,7 @@ All notable changes to the "prettier-vscode" extension will be documented in thi
 ## [4.1.0]
 
 - Support loading Prettier from `node_modules` even if it doesn't appear as a direct dependency in a `package.json`
-- Honor project-scoped config when loading module (#1222, #950)
+- Honor project-scoped config when loading module (#1222, [#950](https://github.com/prettier/prettier-vscode/issues/950))
 - Added configuration option `withNodeModules` to enable processing of files in the `node_modules` folder
 - Updated prettier to 2.0.3 (#1289)
 
@@ -249,12 +249,12 @@ All notable changes to the "prettier-vscode" extension will be documented in thi
 
 ## [3.8.0]
 
-- Fixed issue where VS Code and local config where merged. If local config is present, only it will be used. #1074
+- Fixed issue where VS Code and local config where merged. If local config is present, only it will be used. [#1074](https://github.com/prettier/prettier-vscode/issues/1074)
 
 ## [3.7.0]
 
-- Removed deprecation message from `requireConfig` (Was added by mistake). #1056
-- Sets `resolveConfig: true` to allow parser overrides on [Prettier 1.19+](https://prettier.io/blog/2019/11/09/1.19.0.html#api). #1067
+- Removed deprecation message from `requireConfig` (Was added by mistake). [#1056](https://github.com/prettier/prettier-vscode/issues/1056)
+- Sets `resolveConfig: true` to allow parser overrides on [Prettier 1.19+](https://prettier.io/blog/2019/11/09/1.19.0.html#api). [#1067](https://github.com/prettier/prettier-vscode/issues/1067)
 - Fix for finding local `prettier` module in packages located in `node_modules` dirs
 - Added doc on what languages support range formatting
 
