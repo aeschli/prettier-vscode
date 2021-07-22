@@ -73,15 +73,16 @@ const browserConfig = /** @type WebpackConfig */ {
     "web-extension": "./src/extension.ts",
   },
   output: {
-    filename: "web-[name].js",
+    filename: "[name].js",
     // eslint-disable-next-line no-undef
     path: path.join(__dirname, "./dist"),
     libraryTarget: "commonjs",
   },
   resolve: {
-    mainFields: ["module", "browser", "main"],
-    extensions: [".ts", ".js"], // support ts-files and js-files
+    mainFields: ["module", "main"],
+    extensions: [".ts", ".js", ".mjs"], // support ts-files and js-files
     alias: {
+      // replace the node based resolver with the browser version
       "./ModuleResolver": "./BrowserModuleResolver",
     },
     fallback: {
@@ -89,6 +90,7 @@ const browserConfig = /** @type WebpackConfig */ {
       path: require.resolve("path-browserify"),
       // eslint-disable-next-line no-undef
       util: require.resolve("util/"),
+      os: false,
     },
   },
   module: {
@@ -110,8 +112,12 @@ const browserConfig = /** @type WebpackConfig */ {
   performance: {
     hints: false,
   },
-  devtool: "nosources-source-map",
+  devtool: "source-map",
   plugins: [
+    new webpack.ProvidePlugin({
+      process: "process/browser",
+      babel: "prettier/esm/parser-babel.mjs",
+    }),
     new webpack.DefinePlugin({
       "process.env": JSON.stringify({}),
       "process.env.BROWSER_ENV": JSON.stringify("true"),

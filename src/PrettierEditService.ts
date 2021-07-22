@@ -12,7 +12,7 @@ import {
 } from "vscode";
 import { getParserFromLanguageId } from "./languageFilters";
 import { LoggingService } from "./LoggingService";
-import { INVALID_PRETTIER_CONFIG, RESTART_TO_ENABLE } from "./message";
+import { RESTART_TO_ENABLE } from "./message";
 import { PrettierEditProvider } from "./PrettierEditProvider";
 import { FormatterStatus, StatusBar } from "./StatusBar";
 import {
@@ -22,7 +22,6 @@ import {
   PrettierFileInfoResult,
   PrettierModule,
   PrettierOptions,
-  PrettierResolveConfigOptions,
   RangeFormattingOptions,
 } from "./types";
 import { getConfig, getWorkspaceRelativePath } from "./util";
@@ -108,22 +107,30 @@ export default class PrettierEditService implements Disposable {
   }
 
   public forceFormatDocument = async () => {
-    const editor = window.activeTextEditor;
-    if (!editor) {
-      this.loggingService.logInfo("No active document. Nothing was formatted.");
-      return;
+    try {
+      const editor = window.activeTextEditor;
+      if (!editor) {
+        this.loggingService.logInfo(
+          "No active document. Nothing was formatted."
+        );
+        return;
+      }
+
+      this.loggingService.logInfo(
+        "Forced formatting will not use ignore files."
+      );
+
+      const edits = await this.provideEdits(editor.document, { force: true });
+      if (edits.length !== 1) {
+        return;
+      }
+
+      await editor.edit((editBuilder) => {
+        editBuilder.replace(edits[0].range, edits[0].newText);
+      });
+    } catch (e) {
+      this.loggingService.logError(e);
     }
-
-    this.loggingService.logInfo("Forced formatting will not use ignore files.");
-
-    const edits = await this.provideEdits(editor.document, { force: true });
-    if (edits.length !== 1) {
-      return;
-    }
-
-    await editor.edit((editBuilder) => {
-      editBuilder.replace(edits[0].range, edits[0].newText);
-    });
   };
 
   private prettierConfigChanged = async (uri: Uri) => this.resetFormatters(uri);
@@ -310,7 +317,6 @@ export default class PrettierEditService implements Disposable {
         scheme: "untitled",
       })),
     ];
-
     return { languageSelector, rangeLanguageSelector };
   };
 
@@ -318,15 +324,15 @@ export default class PrettierEditService implements Disposable {
     document: TextDocument,
     options: ExtensionFormattingOptions
   ): Promise<TextEdit[]> => {
-    const hrStart = process.hrtime();
+    const startTime = new Date().getTime();
     const result = await this.format(document.getText(), document, options);
     if (!result) {
       // No edits happened, return never so VS Code can try other formatters
       return [];
     }
-    const hrEnd = process.hrtime(hrStart);
+    const duration = new Date().getTime() - startTime;
     this.loggingService.logInfo(
-      `Formatting completed in ${hrEnd[1] / 1000000}ms.`
+      `Formatting completed in ${duration / 1000}ms.`
     );
     return [TextEdit.replace(this.fullDocumentRange(document), result)];
   };
@@ -339,71 +345,38 @@ export default class PrettierEditService implements Disposable {
    */
   private async format(
     text: string,
-    { fileName, languageId, uri, isUntitled }: TextDocument,
+    doc: TextDocument,
     options: ExtensionFormattingOptions
   ): Promise<string | undefined> {
-    this.loggingService.logInfo(`Formatting ${fileName}`);
+    const { fileName, uri, languageId } = doc;
+
+    this.loggingService.logInfo(`Formatting ${uri}`);
 
     const vscodeConfig = getConfig(uri);
 
-    const prettierGlobalInstance =
-      this.moduleResolver.getGlobalPrettierInstance();
-
-    let configPath: string | undefined;
-    try {
-      if (!isUntitled) {
-        configPath =
-          (await prettierGlobalInstance.resolveConfigFile(fileName)) ??
-          undefined;
-      }
-    } catch (error) {
-      this.loggingService.logError(
-        `Error resolving prettier configuration for ${fileName}`,
-        error
-      );
+    const resolvedConfig = await this.moduleResolver.getResolvedConfig(
+      doc,
+      vscodeConfig
+    );
+    if (resolvedConfig === "error") {
       this.statusBar.update(FormatterStatus.Error);
       return;
     }
-
-    const resolveConfigOptions: PrettierResolveConfigOptions = {
-      config: isUntitled
-        ? undefined
-        : vscodeConfig.configPath
-        ? getWorkspaceRelativePath(fileName, vscodeConfig.configPath)
-        : configPath,
-      editorconfig: isUntitled ? undefined : vscodeConfig.useEditorConfig,
-    };
-
-    let resolvedConfig: PrettierOptions | null;
-    try {
-      resolvedConfig = isUntitled
-        ? null
-        : await prettierGlobalInstance.resolveConfig(
-            fileName,
-            resolveConfigOptions
-          );
-    } catch (error) {
-      this.loggingService.logError(
-        "Invalid prettier configuration file detected.",
-        error
-      );
-      this.loggingService.logError(INVALID_PRETTIER_CONFIG);
-      this.statusBar.update(FormatterStatus.Error);
-      return;
-    }
-
-    if (!isUntitled && !resolvedConfig && vscodeConfig.requireConfig) {
-      this.loggingService.logInfo(
-        "Require config set to true and no config present. Skipping file."
-      );
+    if (resolvedConfig === "disabled") {
       this.statusBar.update(FormatterStatus.Disabled);
       return;
     }
 
-    if (resolveConfigOptions.config) {
-      this.loggingService.logInfo(
-        `Using config file at '${resolveConfigOptions.config}'`
+    const prettierInstance = await this.moduleResolver.getPrettierInstance(
+      fileName
+    );
+
+    if (!prettierInstance) {
+      this.loggingService.logError(
+        "Prettier could not be loaded. See previous logs for more information."
       );
+      this.statusBar.update(FormatterStatus.Error);
+      return;
     }
 
     let resolvedIgnorePath: string | undefined;
@@ -417,18 +390,6 @@ export default class PrettierEditService implements Disposable {
           `Using ignore file (if present) at ${resolvedIgnorePath}`
         );
       }
-    }
-
-    const prettierInstance = await this.moduleResolver.getPrettierInstance(
-      fileName
-    );
-
-    if (!prettierInstance) {
-      this.loggingService.logError(
-        "Prettier could not be loaded. See previous logs for more information."
-      );
-      this.statusBar.update(FormatterStatus.Error);
-      return;
     }
 
     let fileInfo: PrettierFileInfoResult | undefined;

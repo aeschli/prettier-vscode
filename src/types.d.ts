@@ -1,4 +1,5 @@
 import * as prettier from "prettier";
+import { TextDocument } from "vscode";
 
 type PrettierSupportLanguage = {
   vscodeLanguageIds?: string[];
@@ -21,16 +22,15 @@ type PrettierModule = {
     filePath: string,
     options?: PrettierFileInfoOptions
   ): Promise<PrettierFileInfoResult>;
-  resolveConfig(
-    filePath: string,
-    options?: PrettierResolveConfigOptions
-  ): Promise<PrettierOptions | null>;
-  resolveConfigFile(filePath: string): Promise<string | null>;
 };
 
 type ModuleResolverInterface = {
   getPrettierInstance(fileName: string): Promise<PrettierModule | undefined>;
   getGlobalPrettierInstance(): PrettierModule;
+  getResolvedConfig(
+    doc: TextDocument,
+    vscodeConfig: PrettierVSCodeConfig
+  ): Promise<"error" | "disabled" | PrettierOptions | null>;
   dispose(): void;
 };
 
